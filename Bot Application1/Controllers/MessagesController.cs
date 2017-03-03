@@ -7,6 +7,7 @@ using System.Web.Http;
 using System.Web.Http.Description;
 using Microsoft.Bot.Connector;
 using Newtonsoft.Json;
+using System.Diagnostics;
 
 namespace OutlookBot
 {
@@ -26,10 +27,31 @@ namespace OutlookBot
                 // calculate something for us to return
                 int length = (activity.Text ?? string.Empty).Length;
 
-                string eventString;
+                string intentName = "no name found";
+                string intentScore = "no score found";
                 LUISobject eventLUIS = await GetEntityFromLUIS(activity.Text);
+                Debug.WriteLine("event parsed from LUIS is below:");
+                Debug.WriteLine(eventLUIS);
+                if (eventLUIS.intents.Count() > 0)
+                {
+                    switch (eventLUIS.intents[0].intent)
+                    {
+                        case "CreateEvent":
+                            intentName = eventLUIS.intents[0].intent;
+                            intentScore = eventLUIS.intents[0].score;
+                            break;
+                        case "None":
+                            intentName = eventLUIS.intents[0].intent;
+                            intentScore = eventLUIS.intents[0].score;
+                            break;
+                        default:
+                            intentName = "Couldn't score the intents correctly";
+                            break;
+                    }
+                }
+
                 // return our reply to the user
-                Activity reply = activity.CreateReply($"You sent {activity.Text} which returned {eventLUIS}");
+                Activity reply = activity.CreateReply($"You sent {activity.Text} which returned the intent: {intentName} and a score of: {intentScore}");
                 await connector.Conversations.ReplyToActivityAsync(reply);
 
                 // // return our reply to the user

@@ -26,7 +26,8 @@ namespace OutlookBot
 
     public class Intent
     {
-        public string name { get; set; }
+        public string intent { get; set; }
+        public string score { get; set; }
     }
 
     public class Entity
