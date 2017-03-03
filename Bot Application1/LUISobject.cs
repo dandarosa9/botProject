@@ -22,6 +22,7 @@ namespace OutlookBot
         public Model_Features[] model_features { get; set; }
         public object[] regex_features { get; set; }
         public Utterance[] utterances { get; set; }
+        public Dialog dialog { get; set; }
     }
 
     public class Intent
@@ -32,8 +33,15 @@ namespace OutlookBot
 
     public class Entity
     {
-        public string name { get; set; }
-        public string[] children { get; set; }
+        public string entity { get; set; }
+        public string type { get; set; }
+    }
+
+    public class Dialog
+    {
+        public string prompt { get; set; }
+        public string parameterName { get; set; }
+        public string parameterType { get; set; }
     }
 
     public class Composite

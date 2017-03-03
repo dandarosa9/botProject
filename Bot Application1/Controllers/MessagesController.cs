@@ -27,8 +27,15 @@ namespace OutlookBot
                 // calculate something for us to return
                 int length = (activity.Text ?? string.Empty).Length;
 
-                string intentName = "no name found";
+                string intentName = "no entityName found";
                 string intentScore = "no score found";
+                string entityName = "no entityName found";
+                string entityType = "no entityType found";
+                string prompt = "How can I help you?";
+                string paramName = "blank paramName";
+                string paramType = "blank paramType";
+
+
                 LUISobject eventLUIS = await GetEntityFromLUIS(activity.Text);
                 Debug.WriteLine("event parsed from LUIS is below:");
                 Debug.WriteLine(eventLUIS);
@@ -49,14 +56,23 @@ namespace OutlookBot
                             break;
                     }
                 }
+                if (eventLUIS.entities.Count() > 0)
+                {
+                    entityName = eventLUIS.entities[0].entity;
+                    entityType = eventLUIS.entities[0].type;
+                }
+                if (!intentName.Equals("None") && !eventLUIS.dialog.Equals(null))
+                {
+                    prompt = eventLUIS.dialog.prompt;
+                    paramName = eventLUIS.dialog.parameterName;
+                    paramType = eventLUIS.dialog.parameterType;
+                }
 
                 // return our reply to the user
-                Activity reply = activity.CreateReply($"You sent {activity.Text} which returned the intent: {intentName} and a score of: {intentScore}");
-                await connector.Conversations.ReplyToActivityAsync(reply);
+                //Activity reply = activity.CreateReply($"Your input returned the intent: {intentName} and a score of: {intentScore} . \nThe Entity we retrieved is type: {entityType} and the name is {entityName}");
+                Activity reply2 = activity.CreateReply($"{prompt} Meaning we need: {paramType}");
+                await connector.Conversations.ReplyToActivityAsync(reply2);
 
-                // // return our reply to the user
-                // Activity reply = activity.CreateReply($"You sent {activity.Text} which was {length} characters");
-                // await connector.Conversations.ReplyToActivityAsync(reply);
             }
             else
             {
