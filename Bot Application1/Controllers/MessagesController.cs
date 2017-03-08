@@ -31,10 +31,10 @@ namespace OutlookBot
                 string intentScore = "no score found";
                 string entityName = "no entityName found";
                 string entityType = "no entityType found";
+                string paramName = "no paramName found";
+                string paramType = "no paramType found";
                 string prompt = "How can I help you?";
-                string paramName = "blank paramName";
-                string paramType = "blank paramType";
-
+                string needed = "I still need this information from you: ";
 
                 LUISobject eventLUIS = await GetEntityFromLUIS(activity.Text);
                 Debug.WriteLine("event parsed from LUIS is below:");
@@ -50,28 +50,79 @@ namespace OutlookBot
                         case "None":
                             intentName = eventLUIS.intents[0].intent;
                             intentScore = eventLUIS.intents[0].score;
+                            paramName = "CreateEvent";
                             break;
                         default:
                             intentName = "Couldn't score the intents correctly";
                             break;
                     }
                 }
-                if (eventLUIS.entities.Count() > 0)
+                int entityCount = eventLUIS.entities.Count();
+                if (entityCount > 0)
                 {
-                    entityName = eventLUIS.entities[0].entity;
-                    entityType = eventLUIS.entities[0].type;
-                }
-                if (!intentName.Equals("None") && !eventLUIS.dialog.Equals(null))
-                {
-                    prompt = eventLUIS.dialog.prompt;
-                    paramName = eventLUIS.dialog.parameterName;
-                    paramType = eventLUIS.dialog.parameterType;
-                }
+                    
+                    // string[,] parsedEntities = new string[entityCount,2];
+                    for (int count = 0; count < eventLUIS.entities.Count()-1; count++)
+                    {
+                        string[] parsedEntities = new string[entityCount - 1];
+                        entityName = eventLUIS.entities[count].entity;
+                        entityType = eventLUIS.entities[count].type;
+                        Debug.WriteLine("parsedEntities from LUIS is below:");
+                        Debug.WriteLine(entityName + ", " + entityType);
 
-                // return our reply to the user
-                //Activity reply = activity.CreateReply($"Your input returned the intent: {intentName} and a score of: {intentScore} . \nThe Entity we retrieved is type: {entityType} and the name is {entityName}");
-                Activity reply2 = activity.CreateReply($"{prompt} Meaning we need: {paramType}");
-                await connector.Conversations.ReplyToActivityAsync(reply2);
+                        parsedEntities[count] = "Type: " + entityType + "   Name: " + entityName;
+                        // parsedEntities[count, 1] = entityName;
+                        // parsedEntities[count, 2] = entityType;
+                        Debug.WriteLine(parsedEntities[count]);
+                    }
+                    
+                    // Debug.WriteLine("parsedEntities from LUIS is below:");
+                }
+                Debug.WriteLine("intentName: " + intentName);
+
+                // LUIS thinks the intent is None
+                if (intentName.Equals("None"))
+                {
+                    Activity basicReply = activity.CreateReply($"{prompt}");
+                    await connector.Conversations.ReplyToActivityAsync(basicReply);
+                }
+                else
+                {
+                    // LUIS returned a dialog field
+                    if (!eventLUIS.dialog.Equals(null))
+                    {
+                        // If LUIS determines all input criteria has been parsed from message
+                        if (eventLUIS.dialog.status.Equals("Finished"))
+                        {
+                            prompt = "Parsed information successfully!";
+                            needed = "Here is what we have: ";
+                        }
+                        // If LUIS determines it needs more input criteria, it will ask a question
+                        else if (eventLUIS.dialog.status.Equals("Question"))
+                        {
+                            prompt = eventLUIS.dialog.prompt;
+                            paramName = eventLUIS.dialog.parameterName;
+                            paramType = eventLUIS.dialog.parameterType;
+                        }
+
+                        // return our reply to the user
+                        //Activity reply = activity.CreateReply($"Your input returned the intent: {intentName} and a score of: {intentScore} . \nThe Entity we retrieved is type: {entityType} and the name is {entityName}");
+                        Activity reply2 = activity.CreateReply($"{prompt}");
+                        await connector.Conversations.ReplyToActivityAsync(reply2);
+                        if (!paramType.Equals("no paramType found"))
+                        {
+                            Activity reply3 = activity.CreateReply($"{needed}{paramType}");
+                            await connector.Conversations.ReplyToActivityAsync(reply3);
+                        }
+                        else if (eventLUIS.dialog.status.Equals("Finished"))
+                        {
+                            Activity reply3 = activity.CreateReply($"{needed} Sample var 1, Sample var 2");
+                            await connector.Conversations.ReplyToActivityAsync(reply3);
+                        }
+                        
+                                  
+                    }
+                }
 
             }
             else

@@ -42,6 +42,7 @@ namespace OutlookBot
         public string prompt { get; set; }
         public string parameterName { get; set; }
         public string parameterType { get; set; }
+        public string status { get; set; }
     }
 
     public class Composite
