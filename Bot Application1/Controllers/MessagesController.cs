@@ -8,6 +8,8 @@ using System.Web.Http.Description;
 using Microsoft.Bot.Connector;
 using Newtonsoft.Json;
 using System.Diagnostics;
+using System.Collections.Generic;
+using System.Configuration;
 
 namespace OutlookBot
 {
@@ -24,17 +26,48 @@ namespace OutlookBot
             if (activity.Type == ActivityTypes.Message)
             {
                 ConnectorClient connector = new ConnectorClient(new Uri(activity.ServiceUrl));
+                // TODO: uncomment and use similar logic
+                StateClient stateClient = activity.GetStateClient();
+                BotState botState = new BotState(stateClient);
+                BotData botData = null;
+                if (botState != null)
+                {
+                    botData = await botState.GetUserDataAsync(activity.ChannelId, activity.From.Id);
+                }
+                string token;
+                if (botData == null || (token = botData.GetProperty<string>("AccessToken")) == null)
+                {
+                    Activity replyToConversation = activity.CreateReply();
+                    replyToConversation.Recipient = activity.From;
+                    replyToConversation.Type = "message";
+                    replyToConversation.Attachments = new List<Attachment>();
+                    List<CardAction> cardButtons = new List<CardAction>();
+                    CardAction plButton = new CardAction
+                    {
+                        Value = $"{ConfigurationManager.AppSettings["OutlookServiceProviderBaseUrl"]}/api/login?userid=default-user",
+                        //Value = "localhost:3979/api/login?userid=default-user",
+                        Type = "signin",
+                        Title = "Authentication Required"
+                    };
+                    cardButtons.Add(plButton);
+                    SigninCard plCard = new SigninCard("Please login to Office 365 in order to use NetJets Capstone Outlook Bot", cardButtons);
+                    Attachment plAttachment = plCard.ToAttachment();
+                    replyToConversation.Attachments.Add(plAttachment);
+                    await connector.Conversations.SendToConversationAsync(replyToConversation);
+                    return Request.CreateResponse(HttpStatusCode.OK);
+                }
+                
                 // calculate something for us to return
                 int length = (activity.Text ?? string.Empty).Length;
 
-                string intentName = "no entityName found";
-                string intentScore = "no score found";
-                string entityName = "no entityName found";
-                string entityType = "no entityType found";
-                string paramName = "no paramName found";
-                string paramType = "no paramType found";
-                string prompt = "How can I help you?";
-                string needed = "I still need this information from you: ";
+                string IntentName = "no EntityName found";
+                string IntentScore = "no score found";
+                string EntityName = "no EntityName found";
+                string EntityType = "no EntityType found";
+                string ParamName = "no ParamName found";
+                string ParamType = "no ParamType found";
+                string Prompt = "How can I help you?";
+                string Needed = "I still need this information from you: ";
 
                 LUISobject eventLUIS = await GetEntityFromLUIS(activity.Text);
                 Debug.WriteLine("event parsed from LUIS is below:");
@@ -44,16 +77,16 @@ namespace OutlookBot
                     switch (eventLUIS.intents[0].intent)
                     {
                         case "CreateEvent":
-                            intentName = eventLUIS.intents[0].intent;
-                            intentScore = eventLUIS.intents[0].score;
+                            IntentName = eventLUIS.intents[0].intent;
+                            IntentScore = eventLUIS.intents[0].score;
                             break;
                         case "None":
-                            intentName = eventLUIS.intents[0].intent;
-                            intentScore = eventLUIS.intents[0].score;
-                            paramName = "CreateEvent";
+                            IntentName = eventLUIS.intents[0].intent;
+                            IntentScore = eventLUIS.intents[0].score;
+                            ParamName = "CreateEvent";
                             break;
                         default:
-                            intentName = "Couldn't score the intents correctly";
+                            IntentName = "Couldn't score the intents correctly";
                             break;
                     }
                 }
@@ -65,25 +98,25 @@ namespace OutlookBot
                     for (int count = 0; count < eventLUIS.entities.Count()-1; count++)
                     {
                         string[] parsedEntities = new string[entityCount - 1];
-                        entityName = eventLUIS.entities[count].entity;
-                        entityType = eventLUIS.entities[count].type;
+                        EntityName = eventLUIS.entities[count].entity;
+                        EntityType = eventLUIS.entities[count].type;
                         Debug.WriteLine("parsedEntities from LUIS is below:");
-                        Debug.WriteLine(entityName + ", " + entityType);
+                        Debug.WriteLine(EntityName + ", " + EntityType);
 
-                        parsedEntities[count] = "Type: " + entityType + "   Name: " + entityName;
-                        // parsedEntities[count, 1] = entityName;
-                        // parsedEntities[count, 2] = entityType;
+                        parsedEntities[count] = "Type: " + EntityType + "   Name: " + EntityName;
+                        // parsedEntities[count, 1] = EntityName;
+                        // parsedEntities[count, 2] = EntityType;
                         Debug.WriteLine(parsedEntities[count]);
                     }
                     
                     // Debug.WriteLine("parsedEntities from LUIS is below:");
                 }
-                Debug.WriteLine("intentName: " + intentName);
+                Debug.WriteLine("IntentName: " + IntentName);
 
                 // LUIS thinks the intent is None
-                if (intentName.Equals("None"))
+                if (IntentName.Equals("None"))
                 {
-                    Activity basicReply = activity.CreateReply($"{prompt}");
+                    Activity basicReply = activity.CreateReply($"{Prompt}");
                     await connector.Conversations.ReplyToActivityAsync(basicReply);
                 }
                 else
@@ -94,29 +127,29 @@ namespace OutlookBot
                         // If LUIS determines all input criteria has been parsed from message
                         if (eventLUIS.dialog.status.Equals("Finished"))
                         {
-                            prompt = "Parsed information successfully!";
-                            needed = "Here is what we have: ";
+                            Prompt = "Parsed information successfully!";
+                            Needed = "Here is what we have: ";
                         }
                         // If LUIS determines it needs more input criteria, it will ask a question
                         else if (eventLUIS.dialog.status.Equals("Question"))
                         {
-                            prompt = eventLUIS.dialog.prompt;
-                            paramName = eventLUIS.dialog.parameterName;
-                            paramType = eventLUIS.dialog.parameterType;
+                            Prompt = eventLUIS.dialog.prompt;
+                            ParamName = eventLUIS.dialog.parameterName;
+                            ParamType = eventLUIS.dialog.parameterType;
                         }
 
                         // return our reply to the user
-                        //Activity reply = activity.CreateReply($"Your input returned the intent: {intentName} and a score of: {intentScore} . \nThe Entity we retrieved is type: {entityType} and the name is {entityName}");
-                        Activity reply2 = activity.CreateReply($"{prompt}");
+                        //Activity reply = activity.CreateReply($"Your input returned the intent: {IntentName} and a score of: {IntentScore} . \nThe Entity we retrieved is type: {EntityType} and the name is {EntityName}");
+                        Activity reply2 = activity.CreateReply($"{Prompt}");
                         await connector.Conversations.ReplyToActivityAsync(reply2);
-                        if (!paramType.Equals("no paramType found"))
+                        if (!ParamType.Equals("no ParamType found"))
                         {
-                            Activity reply3 = activity.CreateReply($"{needed}{paramType}");
+                            Activity reply3 = activity.CreateReply($"{Needed}{ParamType}");
                             await connector.Conversations.ReplyToActivityAsync(reply3);
                         }
                         else if (eventLUIS.dialog.status.Equals("Finished"))
                         {
-                            Activity reply3 = activity.CreateReply($"{needed} Sample var 1, Sample var 2");
+                            Activity reply3 = activity.CreateReply($"{Needed} Sample var 1, Sample var 2");
                             await connector.Conversations.ReplyToActivityAsync(reply3);
                         }
                         

@@ -124,7 +124,7 @@
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="LUISobject.cs" />
+    <Compile Include="Models\LUISobject.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config" />
