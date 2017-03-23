@@ -27,41 +27,41 @@ namespace OutlookBot
             {
                 ConnectorClient connector = new ConnectorClient(new Uri(activity.ServiceUrl));
                
-                // START OF AUTHENTICATION CODE
-                StateClient stateClient = activity.GetStateClient();
-                BotState botState = new BotState(stateClient);
-                BotData botData = null;
-                if (botState != null)
-                {
-                    botData = await botState.GetUserDataAsync(activity.ChannelId, activity.From.Id);
-                }
-                string token;
-                if (botData == null || (token = botData.GetProperty<string>("AccessToken")) == null)
-                {
-                    Activity replyToConversation = activity.CreateReply();
-                    replyToConversation.Recipient = activity.From;
-                    replyToConversation.Type = "message";
-                    replyToConversation.Attachments = new List<Attachment>();
-                    List<CardAction> cardButtons = new List<CardAction>();
-                    CardAction plButton = new CardAction()
-                    {
-                        //Value = $"https://{ConfigurationManager.AppSettings["OutlookServiceProviderBaseUrl"]}/api/login?userid=default-user",
-                        Value = "https://localhost:3979/api/login?userid=default-user",
-                        Type = "signin",
-                        Title = "Authentication Required"
-                    };
-                    cardButtons.Add(plButton);
-
-                    SigninCard plCard = new SigninCard("Please login to Office 365 in order to use NetJets Capstone Outlook Bot", cardButtons);
-                    Attachment plAttachment = plCard.ToAttachment();
-                    replyToConversation.Attachments.Add(plAttachment);
-                    var reply = await connector.Conversations.SendToConversationAsync(replyToConversation);
-                    Debug.WriteLine("Reply from");
-                    Debug.WriteLine(reply);
-
-                    return Request.CreateResponse(HttpStatusCode.OK);
-                }
-                // END OF AUTHENTICATION CODE
+                //// START OF AUTHENTICATION CODE
+                //StateClient stateClient = activity.GetStateClient();
+                //BotState botState = new BotState(stateClient);
+                //BotData botData = null;
+                //if (botState != null)
+                //{
+                //    botData = await botState.GetUserDataAsync(activity.ChannelId, activity.From.Id);
+                //}
+                //string token;
+                //if (botData == null || (token = botData.GetProperty<string>("AccessToken")) == null)
+                //{
+                //    Activity replyToConversation = activity.CreateReply();
+                //    replyToConversation.Recipient = activity.From;
+                //    replyToConversation.Type = "message";
+                //    replyToConversation.Attachments = new List<Attachment>();
+                //    List<CardAction> cardButtons = new List<CardAction>();
+                //    CardAction plButton = new CardAction()
+                //    {
+                //        //Value = $"https://{ConfigurationManager.AppSettings["OutlookServiceProviderBaseUrl"]}/api/login?userid=default-user",
+                //        Value = "https://localhost:3979/api/login?userid=default-user",
+                //        Type = "signin",
+                //        Title = "Authentication Required"
+                //    };
+                //    cardButtons.Add(plButton);
+                //
+                //    SigninCard plCard = new SigninCard("Please login to Office 365 in order to use NetJets Capstone Outlook Bot", cardButtons);
+                //    Attachment plAttachment = plCard.ToAttachment();
+                //    replyToConversation.Attachments.Add(plAttachment);
+                //    var reply = await connector.Conversations.SendToConversationAsync(replyToConversation);
+                //    Debug.WriteLine("Reply from");
+                //    Debug.WriteLine(reply);
+                //
+                //    return Request.CreateResponse(HttpStatusCode.OK);
+                //}
+                //// END OF AUTHENTICATION CODE
 
                 // LUIS chat logic starts here
                 int length = (activity.Text ?? string.Empty).Length;
@@ -74,7 +74,8 @@ namespace OutlookBot
                 string ParamType = "no ParamType found";
                 string Prompt = "How can I help you?";
                 string Needed = "I still need this information from you: ";
-                
+                Dictionary<string, string> parsedEntities = new Dictionary<string, string>();
+
                 LUISobject eventLUIS = await GetEntityFromLUIS(activity.Text);
                 Debug.WriteLine("event parsed from LUIS is below:");
                 Debug.WriteLine(eventLUIS);
@@ -101,20 +102,28 @@ namespace OutlookBot
                 {
                     
                     // string[,] parsedEntities = new string[entityCount,2];
-                    for (int count = 0; count < eventLUIS.entities.Count()-1; count++)
+                    for (int count = 0; count < eventLUIS.entities.Count(); count++)
                     {
-                        string[] parsedEntities = new string[entityCount - 1];
                         EntityName = eventLUIS.entities[count].entity;
                         EntityType = eventLUIS.entities[count].type;
-                        Debug.WriteLine("parsedEntities from LUIS is below:");
-                        Debug.WriteLine(EntityName + ", " + EntityType);
-                
-                        parsedEntities[count] = "Type: " + EntityType + "   Name: " + EntityName;
+                        //Debug.WriteLine(EntityName + ", " + EntityType);
+
+                        //parsedEntities[count] = "Type: " + EntityType + "   Name: " + EntityName;
+                        parsedEntities.Add(EntityType, EntityName);
                         // parsedEntities[count, 1] = EntityName;
                         // parsedEntities[count, 2] = EntityType;
-                        Debug.WriteLine(parsedEntities[count]);
+                       
+                    }
+                    // Print what we parsed out for Debug
+                    if (parsedEntities.Count > 0)
+                    {
+                        Debug.WriteLine("parsedEntities from LUIS is below:");
+                        foreach (KeyValuePair<string, string> kv in parsedEntities)
+                            Debug.WriteLine(kv.Key.ToString() + ", " + kv.Value.ToString());
                     }
                     
+
+
                     // Debug.WriteLine("parsedEntities from LUIS is below:");
                 }
                 Debug.WriteLine("IntentName: " + IntentName);
@@ -155,7 +164,10 @@ namespace OutlookBot
                         }
                         else if (eventLUIS.dialog.status.Equals("Finished"))
                         {
-                            Activity reply3 = activity.CreateReply($"{Needed} Sample var 1, Sample var 2");
+                            string collected = "";
+                            foreach (KeyValuePair<string, string> kv in parsedEntities)
+                                collected += kv.Key.ToString() + ": " + kv.Value.ToString() + "  ";
+                            Activity reply3 = activity.CreateReply($"{Needed} {collected}");
                             await connector.Conversations.ReplyToActivityAsync(reply3);
                         }
                         
