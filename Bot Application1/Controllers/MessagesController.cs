@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -26,7 +26,8 @@ namespace OutlookBot
             if (activity.Type == ActivityTypes.Message)
             {
                 ConnectorClient connector = new ConnectorClient(new Uri(activity.ServiceUrl));
-                // TODO: uncomment and use similar logic
+               
+                // START OF AUTHENTICATION CODE
                 StateClient stateClient = activity.GetStateClient();
                 BotState botState = new BotState(stateClient);
                 BotData botData = null;
@@ -42,24 +43,29 @@ namespace OutlookBot
                     replyToConversation.Type = "message";
                     replyToConversation.Attachments = new List<Attachment>();
                     List<CardAction> cardButtons = new List<CardAction>();
-                    CardAction plButton = new CardAction
+                    CardAction plButton = new CardAction()
                     {
-                        Value = $"{ConfigurationManager.AppSettings["OutlookServiceProviderBaseUrl"]}/api/login?userid=default-user",
-                        //Value = "localhost:3979/api/login?userid=default-user",
+                        //Value = $"https://{ConfigurationManager.AppSettings["OutlookServiceProviderBaseUrl"]}/api/login?userid=default-user",
+                        Value = "https://localhost:3979/api/login?userid=default-user",
                         Type = "signin",
                         Title = "Authentication Required"
                     };
                     cardButtons.Add(plButton);
+
                     SigninCard plCard = new SigninCard("Please login to Office 365 in order to use NetJets Capstone Outlook Bot", cardButtons);
                     Attachment plAttachment = plCard.ToAttachment();
                     replyToConversation.Attachments.Add(plAttachment);
-                    await connector.Conversations.SendToConversationAsync(replyToConversation);
+                    var reply = await connector.Conversations.SendToConversationAsync(replyToConversation);
+                    Debug.WriteLine("Reply from");
+                    Debug.WriteLine(reply);
+
                     return Request.CreateResponse(HttpStatusCode.OK);
                 }
-                
-                // calculate something for us to return
-                int length = (activity.Text ?? string.Empty).Length;
+                // END OF AUTHENTICATION CODE
 
+                // LUIS chat logic starts here
+                int length = (activity.Text ?? string.Empty).Length;
+                
                 string IntentName = "no EntityName found";
                 string IntentScore = "no score found";
                 string EntityName = "no EntityName found";
@@ -68,7 +74,7 @@ namespace OutlookBot
                 string ParamType = "no ParamType found";
                 string Prompt = "How can I help you?";
                 string Needed = "I still need this information from you: ";
-
+                
                 LUISobject eventLUIS = await GetEntityFromLUIS(activity.Text);
                 Debug.WriteLine("event parsed from LUIS is below:");
                 Debug.WriteLine(eventLUIS);
@@ -102,7 +108,7 @@ namespace OutlookBot
                         EntityType = eventLUIS.entities[count].type;
                         Debug.WriteLine("parsedEntities from LUIS is below:");
                         Debug.WriteLine(EntityName + ", " + EntityType);
-
+                
                         parsedEntities[count] = "Type: " + EntityType + "   Name: " + EntityName;
                         // parsedEntities[count, 1] = EntityName;
                         // parsedEntities[count, 2] = EntityType;
@@ -112,7 +118,7 @@ namespace OutlookBot
                     // Debug.WriteLine("parsedEntities from LUIS is below:");
                 }
                 Debug.WriteLine("IntentName: " + IntentName);
-
+                
                 // LUIS thinks the intent is None
                 if (IntentName.Equals("None"))
                 {
@@ -137,7 +143,7 @@ namespace OutlookBot
                             ParamName = eventLUIS.dialog.parameterName;
                             ParamType = eventLUIS.dialog.parameterType;
                         }
-
+                
                         // return our reply to the user
                         //Activity reply = activity.CreateReply($"Your input returned the intent: {IntentName} and a score of: {IntentScore} . \nThe Entity we retrieved is type: {EntityType} and the name is {EntityName}");
                         Activity reply2 = activity.CreateReply($"{Prompt}");
