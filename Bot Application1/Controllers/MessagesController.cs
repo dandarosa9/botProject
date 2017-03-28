@@ -4,6 +4,8 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
 using System.Web.Http.Description;
 using Microsoft.Bot.Connector;
 using Newtonsoft.Json;
@@ -27,41 +29,41 @@ namespace OutlookBot
             {
                 ConnectorClient connector = new ConnectorClient(new Uri(activity.ServiceUrl));
                
-                //// START OF AUTHENTICATION CODE
-                //StateClient stateClient = activity.GetStateClient();
-                //BotState botState = new BotState(stateClient);
-                //BotData botData = null;
-                //if (botState != null)
-                //{
-                //    botData = await botState.GetUserDataAsync(activity.ChannelId, activity.From.Id);
-                //}
-                //string token;
-                //if (botData == null || (token = botData.GetProperty<string>("AccessToken")) == null)
-                //{
-                //    Activity replyToConversation = activity.CreateReply();
-                //    replyToConversation.Recipient = activity.From;
-                //    replyToConversation.Type = "message";
-                //    replyToConversation.Attachments = new List<Attachment>();
-                //    List<CardAction> cardButtons = new List<CardAction>();
-                //    CardAction plButton = new CardAction()
-                //    {
-                //        //Value = $"https://{ConfigurationManager.AppSettings["OutlookServiceProviderBaseUrl"]}/api/login?userid=default-user",
-                //        Value = "https://localhost:3979/api/login?userid=default-user",
-                //        Type = "signin",
-                //        Title = "Authentication Required"
-                //    };
-                //    cardButtons.Add(plButton);
-                //
-                //    SigninCard plCard = new SigninCard("Please login to Office 365 in order to use NetJets Capstone Outlook Bot", cardButtons);
-                //    Attachment plAttachment = plCard.ToAttachment();
-                //    replyToConversation.Attachments.Add(plAttachment);
-                //    var reply = await connector.Conversations.SendToConversationAsync(replyToConversation);
-                //    Debug.WriteLine("Reply from");
-                //    Debug.WriteLine(reply);
-                //
-                //    return Request.CreateResponse(HttpStatusCode.OK);
-                //}
-                //// END OF AUTHENTICATION CODE
+                // START OF AUTHENTICATION CODE
+                StateClient stateClient = activity.GetStateClient();
+                BotState botState = new BotState(stateClient);
+                BotData botData = null;
+                if (botState != null)
+                {
+                    botData = await botState.GetUserDataAsync(activity.ChannelId, activity.From.Id);
+                }
+                string token;
+                if (botData == null || (token = botData.GetProperty<string>("AccessToken")) == null)
+                {
+                    Activity replyToConversation = activity.CreateReply();
+                    replyToConversation.Recipient = activity.From;
+                    replyToConversation.Type = "message";
+                    replyToConversation.Attachments = new List<Attachment>();
+                    List<CardAction> cardButtons = new List<CardAction>();
+                    CardAction plButton = new CardAction()
+                    {
+                        //Value = $"https://{ConfigurationManager.AppSettings["OutlookServiceProviderBaseUrl"]}/api/login?userid=default-user",
+                        Value = "https://localhost:3979/api/login?userid=default-user",
+                        Type = "signin",
+                        Title = "Authentication Required"
+                    };
+                    cardButtons.Add(plButton);
+                
+                    SigninCard plCard = new SigninCard("Please login to Office 365 in order to use NetJets Capstone Outlook Bot", cardButtons);
+                    Attachment plAttachment = plCard.ToAttachment();
+                    replyToConversation.Attachments.Add(plAttachment);
+                    var reply = await connector.Conversations.SendToConversationAsync(replyToConversation);
+                    Debug.WriteLine("Reply from");
+                    Debug.WriteLine(reply);
+                
+                    return Request.CreateResponse(HttpStatusCode.OK);
+                }
+                // END OF AUTHENTICATION CODE
 
                 // LUIS chat logic starts here
                 int length = (activity.Text ?? string.Empty).Length;
@@ -165,10 +167,35 @@ namespace OutlookBot
                         else if (eventLUIS.dialog.status.Equals("Finished"))
                         {
                             string collected = "";
+                            string attendees = "";
                             foreach (KeyValuePair<string, string> kv in parsedEntities)
+                            {
                                 collected += kv.Key.ToString() + ": " + kv.Value.ToString() + "  ";
+                                if (String.Compare(kv.Key.ToString(),"builtin.email") == 0)
+                                {
+                                    attendees += kv.Value.ToString();
+                                }
+                            }
+
                             Activity reply3 = activity.CreateReply($"{Needed} {collected}");
                             await connector.Conversations.ReplyToActivityAsync(reply3);
+
+                            // here we will call outlook service provider
+                            // pass in token, duration, attendees
+                            // http:// localhost:8000/events?
+                            // token =<tokenIGet>& +
+                            // duration =<durationFormat>& + 
+                            // <durationFormat> = ISO 8601 format PT#H#M (PT is needed, #H(ours) #M(inutes) )
+                            // attendees =<commaListOfEmails>
+
+                            string dur = "PT1H";
+
+                            string request = "http://localhost:8000/events?token=" + token + "&duration=" + dur + "&attendees=" + attendees;
+                            ServiceProviderObject returnedProduct = await GetProductAsync(request);
+                            ShowProduct(returnedProduct);
+                            Activity reply4 = activity.CreateReply($"{request}");
+                            await connector.Conversations.ReplyToActivityAsync(reply4);
+
                         }
                         
                                   
@@ -200,6 +227,55 @@ namespace OutlookBot
                 }
             }
             return Data;
+        }
+
+        /// <summary>
+        /// This is where we begin the "Handshake" between 
+        /// Chat bot and Outlook Service Provider
+        /// </summary>
+        static HttpClient client1 = new HttpClient();
+
+        static void ShowProduct(ServiceProviderObject product)
+        {
+            Debug.WriteLine($"startTime: {product.startTime}\tPrice: {product.endTime}");
+        }
+
+        static void Main()
+        {
+            RunAsync().Wait();
+        }
+        
+        static async Task RunAsync()
+        {
+            // New code:
+            client1.BaseAddress = new Uri("http://localhost:8000/");
+            client1.DefaultRequestHeaders.Accept.Clear();
+            client1.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            try
+            {
+                // Get the product
+                string url = "http://localhost:8000/events";
+                ServiceProviderObject product = await GetProductAsync(url);
+                ShowProduct(product);
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+            }
+
+            Console.ReadLine();
+                }
+        
+        static async Task<ServiceProviderObject> GetProductAsync(string path)
+        {
+            ServiceProviderObject product = null;
+            HttpResponseMessage response = await client1.GetAsync(path);
+            if (response.IsSuccessStatusCode)
+            {
+                product = await response.Content.ReadAsAsync<ServiceProviderObject>();
+            }
+            return product;
         }
 
         private Activity HandleSystemMessage(Activity message)
